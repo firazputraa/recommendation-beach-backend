@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Rekomendasi Pantai</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+</head>
+<body>
+  <h2>Rekomendasi Pantai</h2>
+
+  <label for="tags">Pilih Tag (multi-select):</label><br>
+  <select id="tags" multiple>
+    <option value="surfing">Surfing</option>
+    <option value="tenang">Tenang</option>
+    <option value="ramai">Ramai</option>
+    <option value="ombak besar">Ombak Besar</option>
+    <option value="matahari terbenam">Matahari Terbenam</option>
+    <option value="sunrise">Sunrise</option>
+    <option value="fotogenik">Fotogenik</option>
+    <option value="unik">Unik</option>
+    <option value="sepi">Sepi</option>
+  </select><br><br>
+
+  <label for="rating">Rating (0-5):</label>
+  <input type="number" id="rating" min="0" max="5" step="0.1" value="3.0"><br><br>
+
+  <button onclick="predictBeach()">Lihat Rekomendasi</button>
+
+  <h3>Rekomendasi:</h3>
+  <ul id="beachList"></ul>
+
+  <script>
+    let model;
+    const tagMap = {
+      "surfing": 0, "tenang": 1, "ramai": 2, "ombak besar": 3,
+      "matahari terbenam": 4, "sunrise": 5, "fotogenik": 6,
+      "unik": 7, "sepi": 8
+    };
+
+    async function loadModel() {
+      try {
+        model = await tf.loadLayersModel("tfjs_model/model.json");
+        console.log("✅ Model loaded.");
+      } catch (err) {
+        console.error("❌ Error loading model:", err);
+      }
+    }
+
+    async function predictBeach() {
+      if (!model) {
+        alert("Model belum siap. Mohon tunggu.");
+        return;
+      }
+
+      const selectedTags = Array.from(document.getElementById("tags").selectedOptions).map(opt => opt.value);
+      const rating = parseFloat(document.getElementById("rating").value);
+
+      const inputVector = new Array(10).fill(0); // 9 tag + 1 rating
+      selectedTags.forEach(tag => {
+        if (tagMap[tag] !== undefined) {
+          inputVector[tagMap[tag]] = 1;
+        }
+      });
+      inputVector[9] = rating;
+    console.log(inputVector);
+      const inputTensor = tf.tensor2d([inputVector]); // shape [1,10]
+      const prediction = model.predict(inputTensor);
+      const predictionData = await prediction.data();
+
+      const topIndices = Array.from(predictionData.map((val, idx) => [val, idx]))
+        .sort((a, b) => b[0] - a[0])
+        .slice(0, 3)
+        .map(pair => pair[1]);
+
+      const beachNames = [
+        "Pantai Kuta", "Pantai Parangtritis", "Pantai Tanjung Tinggi",
+        "Pantai Pink", "Pantai Sanur", "Pantai Dreamland"
+      ];
+
+      const listEl = document.getElementById("beachList");
+      listEl.innerHTML = "";
+      topIndices.forEach(i => {
+        const li = document.createElement("li");
+        li.textContent = beachNames[i];
+        listEl.appendChild(li);
+      });
+    }
+
+    // Load model saat halaman dimuat
+    window.onload = loadModel;
+  </script>
+</body>
+</html>
