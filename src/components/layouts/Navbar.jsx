@@ -7,7 +7,7 @@ const Navbar = () => {
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-[#F2F9FF] text-sky-800 px-6 py-4 shadow-md ">
-      <div className="container mx-auto flex items-center justify-around">
+      <div className="container mx-auto flex items-center justify-around ">
 
         {/* Logo */}
         <div className="text-2xl font-bold">
@@ -45,17 +45,17 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="lg:hidden mt-4 space-y-2 text-center">
+        <div className="lg:hidden mt-4 space-y-2 text-center  sm:w-24 ">
           {/* <a href="/" className="block hover:text-sky-500">Home</a>
           <a href="/about" className="block hover:text-sky-500">Detail</a>
           <a href="/destination" className="block hover:text-sky-500">Destination</a> */}
           <button 
-            className="block w-full text-sky-200 bg-sky-800 hover:text-sky-800 hover:bg-sky-200 p-1 rounded-xl"
+            className="block w-full text-sky-200 bg-sky-800 hover:text-sky-800 hover:bg-sky-200 px-4 py-2 rounded-xl"
           >
             SignIn
           </button>
           <button 
-            className="block w-full border border-white px-4 py-2 rounded hover:bg-sky-300 hover:text-blue-600 transition"
+            className="block w-full border border-sky-800 px-4 py-2 hover:bg-sky-800 hover:text-blue-200 transition rounded-xl"
           >
             SignUp
           </button>
