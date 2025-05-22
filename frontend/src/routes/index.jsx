@@ -4,6 +4,8 @@ import Signin from '../auth/SignIn';
 import Signup from '../auth/SignUp';
 import Search from '../components/pages/Searchpage';
 import Navbar from '../components/layouts/Navbar';
+import DetailPage from '../components/pages/DetailPage';
+
 
 const Layout = ({ children }) => (
   <>
@@ -28,7 +30,11 @@ const router = createBrowserRouter([
   {
     path: '/search',
     element: <Layout><Search /></Layout>,
-  },
+   },
+  {
+    path: "/detail/:placeId", 
+    element: <Layout><DetailPage /></Layout>  
+  }
 ]);
 
 const AppRoutes = () => <RouterProvider router={router} />;
