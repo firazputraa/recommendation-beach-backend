@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import cleaned_data from '../../data/cleaned_data.json';
+import { Link } from 'react-router-dom';  // Tambahkan ini
+
+
 
 const SearchPage = () => {
   const location = useLocation();
@@ -101,12 +104,13 @@ const SearchPage = () => {
                   Lihat di Google Maps
                 </a>
 
-                <a
-                  href={`/detail/${place.place_id}`}
+                <Link
+                  to={`/detail/${place.place_id}`}
                   className="bg-blue-500 text-white text-sm px-3 py-1 rounded-md hover:bg-blue-600 transition"
                 >
                   Detail
-                </a>
+                </Link>
+
               </div>
             </div>
           ))}
