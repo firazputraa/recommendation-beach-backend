@@ -3,64 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <title>Sentiment Analysis - Pantai</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  
 </head>
-<body>
+<body onload="myFunction()" style="margin:0;">
   <h2>Analisis Sentimen Review Pantai</h2>
-
-  <textarea id="review" rows="4" cols="50" placeholder="Tulis review di sini..."></textarea>
+  <textarea id="input" rows="4" cols="50" placeholder="Tulis review di sini..."></textarea>
   <br />
-  <button onclick="analyzeSentiment()">Analisa Sentimen</button>
+  <button>Analisa Sentimen</button>
   <p id="result"></p>
-
-  <script>
-    let model;
-
-    // Vocabulary dummy (harus sesuai training)
-    const vocab = {
-      "pantainya": 1,
-      "indah": 2,
-      "bersih": 3,
-      "kotor": 4,
-      "ramai": 5,
-      "tenang": 6,
-      "healing": 7,
-      "mengecewakan": 8,
-      "bagus": 9,
-      "sekali": 10,
-      "tidak": 11,
-      "sesuai": 12,
-      "foto": 13,
-      "nyaman": 14,
-      "sampah": 15,
-      "berisik": 16
-    };
-
-    // Load the model on page load
-    window.onload = async () => {
-      model = await tf.loadGraphModel("tfjs_model/model.json");
-      console.log("Model loaded.");
-    };
-
-    function preprocessText(text) {
-      const words = text.toLowerCase().split(" ");
-      const tokens = words.map(word => vocab[word] || 0);
-      const padded = tokens.concat(Array(10 - tokens.length).fill(0)).slice(0, 10);
-      return tf.tensor2d([padded]);
-    }
-
-    async function analyzeSentiment() {
-      const inputText = document.getElementById("review").value;
-      if (!inputText || !model) return;
-
-      const inputTensor = preprocessText(inputText);
-      const prediction = await model.predict(inputTensor).data();
-
-      const score = prediction[0];
-      const sentiment = score >= 0.5 ? "Positif" : "Negatif";
-
-      document.getElementById("result").innerText = `Sentimen: ${sentiment} (score: ${score.toFixed(2)})`;
-    }
-  </script>
+  <div id="loaderlabel">Loading...</div>
+  <div id="loader"></div>
+  <div id="mainAPP" style="display: none;">Main App Content</div>
+  <script src="script.js" defer></script>
 </body>
 </html>
