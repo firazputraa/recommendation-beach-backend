@@ -8,7 +8,8 @@ let model;
 let word2index;
 
 // Parameter data preprocessing
-const maxlen = 20;
+// Mengubah maxlen dari 100 menjadi 20 agar sesuai dengan shape input model
+const maxlen = 20; // <-- PERUBAHAN DI SINI
 const vocab_size = 2000;
 const padding = 'post';
 const truncating = 'post';
@@ -22,7 +23,7 @@ function myFunction() {
 
 function showPage() {
     document.getElementById("loaderlabel").style.display = "none";
-    document.getElementById("loader").style.display = "none";       
+    document.getElementById("loader").style.display = "none";
     document.getElementById("mainAPP").style.display = "block";
 }
 
@@ -38,11 +39,29 @@ function detectWebGLContext () {
         console.log("Congratulations! Your browser supports WebGL.");
         init();
     } else {
-        alert("Failed to get WebGL context. Your browser or device may not support WebGL.");
+        // Mengganti alert() dengan pesan di konsol atau UI kustom
+        console.error("Failed to get WebGL context. Your browser or device may not support WebGL.");
+        // Anda bisa menambahkan elemen UI untuk menampilkan pesan ini kepada pengguna
+        displayMessage("Failed to get WebGL context. Your browser or device may not support WebGL.", "error");
     }
 }
 
 detectWebGLContext();
+
+// Fungsi untuk menampilkan pesan kepada pengguna (pengganti alert)
+function displayMessage(message, type = "info") {
+    const messageContainer = document.getElementById('messageContainer'); // Pastikan ada elemen ini di HTML Anda
+    if (messageContainer) {
+        messageContainer.innerHTML = `<div class="p-4 rounded-lg ${type === 'error' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}">${message}</div>`;
+        // Opsional: sembunyikan pesan setelah beberapa detik
+        setTimeout(() => {
+            messageContainer.innerHTML = '';
+        }, 5000);
+    } else {
+        console.log(`Message (${type}): ${message}`);
+    }
+}
+
 
 // ----Kolom fungsi `getInput()`-----
 // Fungsi untuk mengambil input review
@@ -63,7 +82,7 @@ function padSequence(sequences, maxLen, padding='post', truncating = "post", pad
                 seq.splice(maxLen, seq.length - maxLen);
             }
         }
-                
+
         if (seq.length < maxLen) {
             const pad = [];
             for (let i = 0; i < maxLen - seq.length; i++){
@@ -74,9 +93,9 @@ function padSequence(sequences, maxLen, padding='post', truncating = "post", pad
             } else {
                 seq = seq.concat(pad);
             }
-        }               
+        }
         return seq;
-        });
+    });
 }
 // -----------------------------------
 
@@ -94,17 +113,21 @@ function predict(inputText){
         }
         return indexed;
     });
-    
+
     // Melakukan padding
+    // paddedSequence akan menjadi array of arrays, e.g., [[val1, val2, ..., val20]]
     const paddedSequence = padSequence([sequence], maxlen);
 
     const score = tf.tidy(() => {
-        const input = tf.tensor2d(paddedSequence, [1, 100]); // [batch_size, input_length]
+        // Mengakses elemen pertama dari paddedSequence untuk mendapatkan array 1D dari angka
+        // Menggunakan konstanta maxlen untuk shape
+        const input = tf.tensor2d(paddedSequence[0], [1, maxlen]); // [batch_size, input_length]
+
         const result = model.predict(input);
         return result.dataSync()[0];
     });
 
-    return score;  
+    return score;
 
 }
 // -----------------------------------
@@ -113,29 +136,33 @@ function predict(inputText){
 // ----Kolom fungsi `onClick()`-----
 // Fungsi yang dijalankan ketika tombol "Post Review" diclick
 function onClick(){
-    
+
     if(!isModelLoaded) {
-        alert('Model not loaded yet');
+        // Mengganti alert()
+        displayMessage('Model not loaded yet. Please wait.', 'info');
         return;
     }
 
     if (getInput() === '') {
-        alert("Review Can't be Null");
+        // Mengganti alert()
+        displayMessage("Review Can't be Null. Please enter some text.", 'error');
         document.getElementById('input').focus();
         return;
     }
-    
-    // 
+
+    //
     const inputText = getInput().trim().toLowerCase().split(" ");
 
-    // Score prediksi dengan nilai 0 s/d 1 
-    let score = predict(inputText); 
+    // Score prediksi dengan nilai 0 s/d 1
+    let score = predict(inputText);
 
     // Kondisi penentuan hasil prediksi berdasarkan nilai score
     if (score > 0.5) {
-        alert ('Positive Review \n'+score);
+        // Mengganti alert()
+        displayMessage(`Positive Review\nScore: ${score.toFixed(4)}`, 'success');
     } else {
-        alert ('Negative Review \n'+score);
+        // Mengganti alert()
+        displayMessage(`Negative Review\nScore: ${score.toFixed(4)}`, 'info');
     }
 }
 // -----------------------------------
@@ -153,14 +180,19 @@ async function init(){
         isModelLoaded = true;
     } catch (error) {
         console.error('Error loading model:', error);
+        displayMessage('Failed to load the model. Please check the server and model path.', 'error');
     }
 
     //Memanggil word_index
     // const word_indexjson = await fetch('http://127.0.0.1:5500/word_index.json'); // Untuk VS Code Live Server
-    const word_indexjson = await fetch('http://localhost:8000/word_index.json'); 
-    word2index = await word_indexjson.json();
-
-    console.log(model.summary()); 
-    console.log('Model & Metadata Loaded Succesfully');
+    try {
+        const word_indexjson = await fetch('http://localhost:8000/word_index.json');
+        word2index = await word_indexjson.json();
+        console.log('Model & Metadata Loaded Succesfully');
+        displayMessage('Model and metadata loaded successfully!', 'success');
+    } catch (error) {
+        console.error('Error loading word_index.json:', error);
+        displayMessage('Failed to load word index. Check the server and file path.', 'error');
+    }
 }
 // -----------------------------------
