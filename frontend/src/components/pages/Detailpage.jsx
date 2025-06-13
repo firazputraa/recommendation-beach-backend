@@ -1,282 +1,335 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useParams } from 'react-router-dom';
-import cleaned_data from '../../data/cleaned_data.json';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import 'swiper/css';
-import { Navigation, Pagination } from 'swiper/modules';
-    
+// DetailPage.jsx
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { DetailTemplate } from '../templates/DetailTemplate';
+import beach from "../../assets/beach.png";
+import toast from 'react-hot-toast';
 
 const DetailPage = () => {
-    const swiperRef = useRef(null);
-    const recommendationSwiperRef = useRef(null);
-    const { placeId } = useParams();
-    const place = cleaned_data.find(p => p.place_id === placeId);
-    const recommendedPlaces = cleaned_data.filter(p => p.place_id !== placeId).slice(0, 10); 
-    const [newFeedback, setNewFeedback] = useState({
-        rating: 0,
-        comment: '',
-        });
-    const handleStarClick = (rating) => {
-        setNewFeedback({
-            ...newFeedback,
-            rating,
-        });
-    };
-    
-    useEffect(() => {
-        window.scrollTo(0, 0); 
-    }, [placeId]);
-    
-    if (!place) {
-        return <div>Tempat wisata tidak ditemukan.</div>;
+  const { placeId } = useParams();
+  const navigate = useNavigate();
+  const { user, isLoggedIn, token } = useAuth();
+  const swiperRef = useRef(null);
+
+  const [place, setPlace] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [newFeedback, setNewFeedback] = useState({ rating: 0, comment: '' });
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [recommendedPlaces, setRecommendedPlaces] = useState([]);
+  const [imageLoadErrors, setImageLoadErrors] = useState(new Set());
+
+  // Helper function to convert degrees to radians
+  const toRad = (v) => (v * Math.PI) / 180; // Not used in this component, but good to keep if needed
+
+  // Parses coordinate string "lat,lng" into a [lat, lng] array
+  const parseCoordinates = (coordString) => {
+    if (!coordString) return [-6.2088, 106.8456]; // Default to Jakarta if no coordinates
+    const [latStr, lngStr] = coordString.split(',');
+    const lat = parseFloat(latStr);
+    const lng = parseFloat(lngStr);
+    return (isNaN(lat) || isNaN(lng)) ? [-6.2088, 106.8456] : [lat, lng];
+  };
+
+  // Processes image URLs, ensuring there are always 5 images (filling with default if needed)
+  const processImages = (place) => {
+    let arr = Array.isArray(place.featured_image)
+      ? place.featured_image
+      : place.featured_image?.split(',') || [];
+    if (arr.length === 0 && place.image_urls) arr = place.image_urls.split(',');
+    arr = arr.filter(u => u).slice(0, 5);
+    while (arr.length < 5) arr.push(beach); // Ensure at least 5 images
+    return arr;
+  };
+
+  // Handles star click for review rating input
+  const handleStarClick = useCallback((rating) => {
+    setNewFeedback(prev => ({ ...prev, rating }));
+  }, []);
+
+  // Handles submission of a new review
+  const handleSubmitReview = useCallback(async () => {
+    if (!isLoggedIn) {
+      toast.error("Silakan login untuk memberikan review.");
+      return;
     }
 
-    const [feedbacks, setFeedbacks] = useState([
-        {
-            name: 'Dimas',
-            rating: 4,
-            comment: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+    const hasReviewed = feedbacks.some(r => r.userId === user?.id);
+    if (hasReviewed) {
+      toast.error("Kamu sudah memberikan review untuk tempat ini.");
+      return;
+    }
+
+    if (newFeedback.rating === 0) {
+      toast.error("Rating tidak boleh kosong.");
+      return;
+    }
+    if (newFeedback.comment.trim() === "") {
+      toast.error("Komentar tidak boleh kosong.");
+      return;
+    }
+
+    try {
+      const payload = {
+        placeId,
+        rating: newFeedback.rating,
+        review_text: newFeedback.comment.trim(),
+      };
+
+      const res = await fetch('http://localhost:5000/review/', { // Ensure this URL matches your Node.js backend
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(err.message || `Failed to submit review: ${res.status}`);
+      }
+
+      const addedReviewData = await res.json();
+      const addedReview = addedReviewData.review; // Extract the 'review' object from the response
+
+      setFeedbacks(prev => [
         {
-            name: 'Dimas',
-            rating: 4,
-            comment: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+          ...addedReview,
+          id: addedReview.id, // Ensure id is present
+          userId: addedReview.userId,
+          name: user.username, // Use current user's username
+          comment: addedReview.review_text,
+          rating: addedReview.rating,
+          sentiment: addedReview.average_sentiment, // Get sentiment from backend response
+          timestamp: addedReview.createdAt,
         },
-        {
-            name: 'Dimas',
-            rating: 4,
-            comment: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+        ...prev, // Add new review to the top
+      ]);
+      setNewFeedback({ rating: 0, comment: '' }); // Reset form
+      toast.success('Review berhasil ditambahkan!');
+
+    } catch (e) {
+      console.error("Error submitting review:", e);
+      toast.error(`Gagal submit review: ${e.message}`);
+    }
+  }, [feedbacks, user, placeId, newFeedback, token, isLoggedIn]);
+
+
+  // Handles deletion of a review
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!selectedReview) return;
+    try {
+      const res = await fetch(`http://localhost:5000/review/${selectedReview.id}`, { // Ensure this URL matches your Node.js backend
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(err.message || `Failed to delete review: ${res.status}`);
+      }
+      setFeedbacks(prev => prev.filter(r => r.id !== selectedReview.id));
+      setSelectedReview(null);
+      setDeleteModalOpen(false);
+      toast.success('Review berhasil dihapus');
+    } catch (e) {
+      console.error("Error deleting review:", e);
+      toast.error(`Gagal menghapus review: ${e.message}`);
+    }
+  }, [selectedReview, token]);
+
+  // Handles updating an existing review
+  const handleUpdateReview = useCallback(async (reviewId, updatedComment, updatedRating) => {
+    try {
+      if (updatedRating === 0) {
+        toast.error("Rating tidak boleh kosong.");
+        return;
+      }
+      if (updatedComment.trim() === "") {
+        toast.error("Komentar tidak boleh kosong.");
+        return;
+      }
+
+      const payload = {
+        review_text: updatedComment.trim(),
+        rating: updatedRating,
+      };
+
+      const res = await fetch(`http://localhost:5000/review/${reviewId}`, { // Ensure this URL matches your Node.js backend
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        {
-            name: 'Dimas',
-            rating: 4,
-            comment: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-        },
-        {
-            name: 'Dimas',
-            rating: 4,
-            comment: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-        },
-    ]);
+        body: JSON.stringify(payload),
+      });
 
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(err.message || `Failed to update review: ${res.status}`);
+      }
 
-    return (
-    <div className="p-6 bg-gradient-to-b from-[#dcefff] to-white max-screen mx-auto">
-    <>
-        {/* Tentang Pantainya */}
-        <section className="max-w-6xl mx-auto p-6 bg-white rounded-md shadow-md mt-8">
-            <img
-                src={place.featured_image}
-                alt={place.name}
-                className="w-full h-96 object-cover rounded-xl mb-4"
-            />
-                <h1 className="text-4xl font-bold text-gray-800">{place.name}</h1>
-                <p className="text-lg text-gray-600 mt-2">{place.description}</p>
-                <p className="text-sm text-gray-500 mt-2">Rating: {place.rating}</p>
-            <div className="max-w-6xl mx-auto p-6 bg-white rounded-md shadow-md mt-8">
-            <h2 className="text-3xl font-bold mb-4 text-center">Lokasi</h2>
-            <div className="mb-4">
-            <iframe 
-                width="100%" 
-                height="450" 
-                style={{ border: 0 }} 
-                loading="lazy" 
-                allowFullScreen
-                src={`https://www.google.com/maps/embed/v1/place?q=${encodeURIComponent(place.address)}&key=YOUR_GOOGLE_MAPS_API_KEY`}>
-            </iframe>
-            </div>
-            </div>
-                <p className="text-sm text-gray-500">Alamat: {place.address}</p>
-        </section>
+      const updatedReviewData = await res.json();
+      const updatedReview = updatedReviewData.review; // Extract the 'review' object from the response
 
-        <section className="max-w-6xl mx-auto py-10 px-20 bg-white mt-10 px-100 rounded-md shadow-md">
-            <h1 className="text-4xl font-bold mt-10 text-center">Our Customer Feedback</h1>
-            <p className="font-normal mt-3 *:mb-8 text-center text-gray-600">Don’t take our word for it. Trust our customers</p>
+      setFeedbacks(prev =>
+        prev.map(r =>
+          r.id === reviewId
+            ? {
+              ...r,
+              comment: updatedReview.review_text,
+              rating: updatedReview.rating,
+              sentiment: updatedReview.average_sentiment, // Get sentiment from backend response
+              timestamp: updatedReview.updatedAt || updatedReview.createdAt, // Use updatedAt if available
+            }
+            : r
+        )
+      );
+      setEditModalOpen(false);
+      setSelectedReview(null);
+      toast.success('Review berhasil diperbarui!');
+    } catch (e) {
+      console.error("Error updating review:", e);
+      toast.error(`Gagal memperbarui review: ${e.message}`);
+    }
+  }, [token]);
 
-        <Swiper
-            loop={true}
-            modules={[Navigation, Pagination]}
-            slidesPerView={3} 
-            spaceBetween={20} 
-            navigation
-            pagination={{ clickable: true }}
-            onSwiper={(swiper) => (swiperRef.current = swiper)}
-            className="mySwiper cursor-pointer"
-        >
-        {feedbacks.map((feedback, index) => (
-        <SwiperSlide key={index}>
-            <div className="bg-white border p-6 rounded-md shadow-md mb-6">
-            <div className="font-semibold text-lg text-gray-800">{feedback.name}</div>
-            <div className="flex items-center text-yellow-600 mt-2">
-                {Array.from({ length: 5 }, (_, i) => (
-                <span
-                   key={i}
-                   className={`text-2xl ${feedback.rating >= i + 1 ? 'text-yellow-500' : 'text-gray-300'}`}
-                >
-                    ★
-                </span>
-                ))}
-            </div>
-              <p className="mt-2 text-gray-600">{feedback.comment}</p>
-            </div>
-        </SwiperSlide>
-        ))}
-        </Swiper>
-        <div className="flex justify-center mt-8 space-x-4">
-            <button 
-            onClick={() => swiperRef.current?.slidePrev()}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-                &lt; Previous
-            </button>
-            <button 
-            onClick={() => swiperRef.current?.slideNext()}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-                Next &gt;
-            </button>
-        </div>
-        </section>
+  // Sets the selected review for editing
+  const handleEditClick = useCallback((rev) => {
+    setSelectedReview(rev);
+    setEditModalOpen(true);
+  }, []);
 
-        {/* Feedback Form */}
-        <section className="max-w-6xl mx-auto px-20 py-5 bg-white rounded-md shadow-md mt-8 mb-8">
-            <h1 className="text-4xl font-bold mt-10 text-center">Have you ever visited there?</h1>
-            <p className="font-normal mt-5 mb-10 text-center text-gray-600">Give your assessment here</p>
-            <form
-                onSubmit={(e) => {
-                e.preventDefault();
-                if (newFeedback.name && newFeedback.comment && newFeedback.rating) {
-                    setFeedbacks([
-                        ...feedbacks,
-                       { ...newFeedback, rating: Number(newFeedback.rating) },
-                        ]);
-                        setNewFeedback({ name: '', rating: 0, comment: '' });
-                        }
-                    }}
-                >
-            <div className="flex items-center space-x-2">
-            {Array.from({ length: 5 }, (_, index) => (
-                <span
-                    key={index}
-                    className={`text-4xl cursor-pointer ${
-                    newFeedback.rating > index ? 'text-yellow-500' : 'text-gray-300'
-                    }`}
-                    onClick={() => handleStarClick(index + 1)}
-                    >
-                    ★
-                </span>
-            ))}
-            </div>
-            <div className="my-4">
-                <textarea
-                    id="comment"
-                    placeholder="Write your comment here..."
-                    value={newFeedback.comment}
-                    onChange={(e) => setNewFeedback({ ...newFeedback, comment: e.target.value })}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    rows="4"
-                    required
-                />
-            </div>
-     
-            <div className="flex justify-end">
-                <button
-                    type="submit"
-                    className="bg-blue-600 text-white px-6 py-2 rounded-md mb-5 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                >
-                Submit Feedback
-                </button>
-            </div>
-        </form>
-        </section>
-        <section className="max-w-6xl mx-auto py-10 px-20  mt-10">
-            <h1 className="text-4xl font-bold mt-10 text-center">Recommendation</h1>
-            <p className="font-normal mt-5 mb-10 text-center text-gray-600">You might also like this place</p>
+  // Sets the selected review for deletion
+  const handleDeleteClick = useCallback((rev) => {
+    setSelectedReview(rev);
+    setDeleteModalOpen(true);
+  }, []);
 
-            {/* Swiper untuk Rekomendasi */}
-        <Swiper
-                loop={true}
-                modules={[Navigation, Pagination]}
-                slidesPerView={3} 
-                spaceBetween={20}
-                navigation={true} 
-                pagination={{ clickable: true }}
-                onSwiper={(swiper) => (recommendationSwiperRef.current = swiper)} 
-                className="mySwiper cursor-pointer"
-                >
-            {recommendedPlaces.map((recPlace) => ( 
-        <SwiperSlide key={recPlace.place_id}>
-            <div
-                className="bg-white rounded-2xl  shadow-md p-4 flex flex-col transition-transform hover:scale-[1.02] hover:shadow-lg h-full min-h-[600px]"
-            >
-            <img
-                src={recPlace.featured_image}
-                alt={recPlace.name}
-                onError={(e) => (e.target.src = '/fallback-image.jpg')}
-                className="w-full h-48 object-cover mb-3 rounded-xl"
-            />
-            <h2 className="text-lg font-semibold text-gray-800 mb-1">{recPlace.name}</h2>
-                <p className="text-sm text-gray-600 mb-2 line-clamp-3">
-                    {recPlace.description && recPlace.description !== '-'
-                    ? recPlace.description
-                    : 'Belum ada deskripsi tersedia untuk tempat ini.'}
-                </p>
+  // Handles image loading errors to replace broken images
+  const handleImageError = useCallback((url) => {
+    setImageLoadErrors(s => new Set(s).add(url));
+  }, []);
 
-                <p className="text-sm text-yellow-600 mb-2">
-                    ⭐ {recPlace.rating} ({recPlace.reviews.toLocaleString()} ulasan)
-                </p>
+  // Scrolls to top on placeId change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [placeId]);
 
-            <div className="flex flex-wrap gap-2 mb-3">
-                {recPlace.review_keywords && recPlace.review_keywords.split(', ').map((keyword, index) => (
-                    <span
-                        key={index}
-                        className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full"
-                    >
-                        #{keyword}
-                    </span>
-                ))}
-            </div>
+  // Fetches place details
+  useEffect(() => {
+    const fetchPlaceDetails = async () => {
+      if (!placeId) {
+        setError('No place ID provided.');
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const res = await fetch(`http://localhost:5000/beach/${placeId}`); // Adjust URL if needed
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: 'Unknown error' }));
+          throw new Error(res.status === 404 ? 'Beach not found.' : err.message || 'Failed to fetch place details.');
+        }
+        setPlace(await res.json());
+      } catch (e) {
+        console.error("Error fetching place details:", e);
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPlaceDetails();
+  }, [placeId]);
 
-            <p className="text-sm text-gray-500 mb-2">
-                <strong>Alamat:</strong> {recPlace.address}
-            </p>
+  // Fetches reviews for the place
+  useEffect(() => {
+    const fetchReviews = async () => {
+      if (!placeId) return;
+      try {
+        const res = await fetch(`http://localhost:5000/review/${placeId}`); // Ensure this URL matches your Node.js backend
+        if (res.ok) {
+          const data = await res.json();
+          setFeedbacks(data.reviews.map(r => ({
+            ...r,
+            id: r.id,
+            userId: r.userId, // Ensure userId is available
+            name: r.user?.username || 'Anonymous', // Safely get username
+            comment: r.review_text,
+            rating: r.rating,
+            sentiment: r.average_sentiment,
+            timestamp: r.createdAt
+          })));
+        } else {
+          console.error(`Failed to fetch reviews: ${res.status}`);
+        }
+      } catch (e) {
+        console.error("Error fetching reviews:", e);
+      }
+    };
+    fetchReviews();
+  }, [placeId]);
 
-            <div className="mt-auto flex justify-between items-center">
-            <a
-                href={recPlace.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm"
-            >
-                Lihat di Google Maps
-            </a>
-            <Link
-                to={`/detail/${recPlace.place_id}`}
-                className="bg-blue-500 text-white text-sm px-3 py-1 rounded-md hover:bg-blue-600 transition"
-            >
-                Detail
-            </Link>
-            </div>
-        </div>
-        </SwiperSlide> ))}
-        </Swiper>
-            {/* Tombol Kustom untuk Swiper Rekomendasi */}
-                <div className="flex justify-center mt-8 space-x-4">
-                <button
-                    onClick={() => recommendationSwiperRef.current?.slidePrev()} // Gunakan recommendationSwiperRef
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                >
-                    &lt; Previous
-                </button>
-                <button
-                    onClick={() => recommendationSwiperRef.current?.slideNext()} // Gunakan recommendationSwiperRef
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                >
-                    Next &gt;
-                </button>
-                </div>
-            </section>
-            </>
-        </div>
-    );
+  // Fetches recommended places (nearby)
+  useEffect(() => {
+    const fetchRecommendedPlaces = async () => {
+      if (!place?.coordinates) return;
+      const [lat, lng] = parseCoordinates(place.coordinates);
+      try {
+        const res = await fetch(`http://localhost:5000/beach/nearby?lat=${lat}&lng=${lng}&radius=50&limit=10`); // Adjust URL if needed
+        if (res.ok) {
+          const json = await res.json();
+          setRecommendedPlaces(json.data.filter(p => p.place_Id !== placeId));
+        } else {
+          console.error(`Failed to fetch recommended places: ${res.status}`);
+        }
+      } catch (e) {
+        console.error("Error fetching recommended places:", e);
+      }
+    };
+    fetchRecommendedPlaces();
+  }, [place, placeId]);
+
+  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (error || !place) return <div className="text-center p-8 text-red-500">Error: {error || 'Place not found.'}</div>;
+
+  return (
+    <DetailTemplate
+      place={place}
+      finalMainImages={processImages(place)}
+      coordinates={parseCoordinates(place.coordinates)}
+      recommendedPlaces={recommendedPlaces}
+      isLoggedIn={isLoggedIn}
+      user={user}
+      newFeedback={newFeedback}
+      setNewFeedback={setNewFeedback}
+      handleStarClick={handleStarClick}
+      handleSubmitReview={handleSubmitReview}
+      feedbacks={feedbacks}
+      setFeedbacks={setFeedbacks}
+      swiperRef={swiperRef}
+      openDropdownId={openDropdownId}
+      setOpenDropdownId={setOpenDropdownId}
+      handleEditClick={handleEditClick}
+      handleDeleteClick={handleDeleteClick}
+      handleDeleteConfirm={handleDeleteConfirm}
+      handleUpdateReview={handleUpdateReview}
+      editModalOpen={editModalOpen}
+      setEditModalOpen={setEditModalOpen}
+      deleteModalOpen={deleteModalOpen}
+      setDeleteModalOpen={setDeleteModalOpen}
+      selectedReview={selectedReview}
+      setSelectedReview={setSelectedReview}
+      handleImageError={handleImageError}
+      imageLoadErrors={imageLoadErrors}
+    />
+  );
 };
+
 export default DetailPage;
