@@ -1,7 +1,7 @@
 
 
 
-# 🌊 API PantaiKu
+# 🌊 BiruLaut
 
 Selamat datang di dokumentasi **API PantaiKu**. API ini memungkinkan Anda untuk mengelola data pantai, ulasan pengguna, dan akun pengguna.
 
