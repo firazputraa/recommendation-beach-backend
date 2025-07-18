@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(helmet());
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: ["https://cheerful-buttercream-e459e1.netlify.app"],
   credentials: true,
 }));
 app.use(express.json());
