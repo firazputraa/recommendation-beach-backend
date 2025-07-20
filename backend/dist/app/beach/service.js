@@ -17,7 +17,7 @@ exports.findNearbyBeaches = exports.getBeachDetails = exports.searchBeachesFromM
 const client_1 = require("@prisma/client");
 const BadRequestError_1 = require("../../error/BadRequestError"); // Sesuaikan path jika perlu
 const axios_1 = __importDefault(require("axios"));
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:5001"; // URL service ML Anda
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://recommendation-beach-machine-learning-production.up.railway.app"; // URL service ML Anda
 const prisma = new client_1.PrismaClient();
 // --- Helper function to calculate distance (Haversine formula) ---
 function toRadians(degrees) {

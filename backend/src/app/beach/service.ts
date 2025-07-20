@@ -10,7 +10,7 @@ import {
   NearbyBeachDetail,
 } from "./dto"; // Pastikan semua DTO di-import
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:5001"; // URL service ML Anda
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://recommendation-beach-machine-learning-production.up.railway.app"; // URL service ML Anda
 const prisma = new PrismaClient();
 
 // --- Helper function to calculate distance (Haversine formula) ---

@@ -18,7 +18,7 @@ const client_1 = require("@prisma/client");
 const BadRequestError_1 = require("../../error/BadRequestError");
 const axios_1 = __importDefault(require("axios"));
 const UnauthorizedError_1 = require("../../error/UnauthorizedError");
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:5001";
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://recommendation-beach-machine-learning-production.up.railway.app";
 const prisma = new client_1.PrismaClient();
 const analyzeAndSaveReview = (userId, placeId, rating, review_text) => __awaiter(void 0, void 0, void 0, function* () {
     const existingBeach = yield prisma.beach.findUnique({

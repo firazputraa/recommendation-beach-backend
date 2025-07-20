@@ -5,7 +5,7 @@ import axios from "axios";
 import { SentimentResult, ReviewDetails } from "./dto";
 import { UnauthorizedError } from "../../error/UnauthorizedError";
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:5001";
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://recommendation-beach-machine-learning-production.up.railway.app";
 
 const prisma = new PrismaClient();
 
