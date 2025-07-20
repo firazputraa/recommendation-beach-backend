@@ -51,7 +51,7 @@ const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({
-    origin: ["https://cheerful-buttercream-e459e1.netlify.app"],
+    origin: "https://cheerful-buttercream-e459e1.netlify.app",
     credentials: true,
 }));
 app.use(express_1.default.json());
