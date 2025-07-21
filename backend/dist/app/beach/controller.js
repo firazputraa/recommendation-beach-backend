@@ -45,39 +45,52 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// ./app/beach/controller.ts
 const express_1 = __importDefault(require("express"));
 const beachService = __importStar(require("./service"));
 const schema_1 = require("./schema");
-const BadRequestError_1 = require("../../error/BadRequestError"); // Sesuaikan path jika perlu
+const BadRequestError_1 = require("../../error/BadRequestError");
 const auth_1 = require("../../middleware/auth");
 const router = express_1.default.Router();
-// NO AUTHENTICATION NEEDED FOR THESE ROUTES
+// Rute yang membutuhkan otentikasi
 router.post("/recommend", auth_1.authenticateJWT, (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Pastikan req.user ada setelah authenticateJWT
+        if (!req.user) {
+            res.status(401).json({ message: "User not authenticated" });
+            return;
+        }
         const validatedData = schema_1.PreferenceInputSchema.parse(req.body);
         const { preference_text } = validatedData;
-        // Ambil user_id dari request jika ada (misal dari JWT/session di middleware auth)
-        // Untuk contoh ini, kita asumsikan user_id bisa langsung ada di body jika tidak ada autentikasi
-        // ATAU Anda bisa melewatkan user_id dari middleware autentikasi ke req.user.id
-        const userId = req.body.user_id || null; // <--- TAMBAHKAN INI UNTUK USER_ID
-        const recommendations = yield beachService.getBeachRecommendations(preference_text, userId // <--- LEWATKAN USER_ID KE SERVICE
-        );
+        const userId = req.user.id; // Ambil user ID dari token JWT
+        const recommendations = yield beachService.getBeachRecommendations(preference_text, userId);
         res.json({
             message: "Beach recommendations based on your preference",
             recommendations,
         });
     }
     catch (error) {
-        if (error.name === "ZodError" &&
-            error.issues &&
-            Array.isArray(error.issues) &&
-            error.issues.length > 0) {
+        if (error.name === "ZodError") {
             return next(new BadRequestError_1.BadRequestError(`Validation Error: ${error.issues[0].message}`));
         }
         next(error);
     }
 }));
+// --- BARU: Endpoint untuk mengambil detail beberapa pantai sekaligus ---
+router.post("/batch-details", (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { placeIds } = req.body; // Mengharapkan body: { placeIds: ["id1", "id2", ...] }
+        if (!Array.isArray(placeIds) || placeIds.length === 0) {
+            throw new BadRequestError_1.BadRequestError("placeIds must be a non-empty array.");
+        }
+        // Anda perlu membuat fungsi ini di service dan repository Anda
+        const beachDetails = yield beachService.getBeachesByIds(placeIds);
+        res.json(beachDetails);
+    }
+    catch (error) {
+        next(error);
+    }
+}));
+// Rute yang tidak membutuhkan otentikasi
 router.get("/search", (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const queryValidationResult = schema_1.BeachSearchQuerySchema.safeParse(req.query);
@@ -86,40 +99,43 @@ router.get("/search", (req, res, next) => __awaiter(void 0, void 0, void 0, func
             throw new BadRequestError_1.BadRequestError(`Invalid query parameter: ${firstError.path.join(".")} - ${firstError.message}`);
         }
         const { search: searchQuery, limit = 10, page = 1, } = queryValidationResult.data;
-        // Ubah dari searchBeaches ke searchBeachesFromML
-        const beaches = yield beachService.searchBeachesFromML(
-        // <--- PERUBAHAN DI SINI
-        searchQuery, limit);
+        // --- Perbaikan Terakhir ---
+        if (!searchQuery) {
+            res.json({
+                message: "Search query is empty, returning no results.",
+                count: 0,
+                totalCount: 0,
+                page: page,
+                limit: limit,
+                data: [],
+            });
+            return;
+        }
+        const beachesResult = yield beachService.searchBeachesFromML(searchQuery, limit, page);
+        // Asumsi service ML mengembalikan struktur { data: [...], totalCount: X }
         res.json({
             message: "Beaches retrieved successfully",
-            count: beaches.length,
-            // totalCount: totalCountForSearch, // Ini akan dihandle oleh ML Service jika dia mengirim total
-            page: page, // Page dari request
-            limit: limit, // Limit dari request
-            data: beaches,
+            count: beachesResult.data.length,
+            totalCount: beachesResult.totalCount,
+            page: page,
+            limit: limit,
+            data: beachesResult.data,
         });
     }
     catch (error) {
         next(error);
     }
 }));
-// --- Route baru untuk mencari pantai terdekat ---
-router.get("/nearby", // Path: /beach/nearby?lat=-6.20&lng=106.81&radius=20&limit=5&page=1
-(req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+router.get("/nearby", (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const queryValidationResult = schema_1.NearbyBeachQuerySchema.safeParse(req.query);
         if (!queryValidationResult.success) {
-            const firstError = queryValidationResult.error.issues[0];
-            // Menggabungkan semua pesan error jika ada lebih dari satu
             const errorMessages = queryValidationResult.error.issues
                 .map((issue) => `${issue.path.join(".")} - ${issue.message}`)
                 .join(", ");
             throw new BadRequestError_1.BadRequestError(`Invalid query parameter(s): ${errorMessages}`);
         }
-        const { lat, lng, radius, // Default dari schema akan digunakan
-        limit, // Default dari schema
-        page, // Default dari schema
-         } = queryValidationResult.data;
+        const { lat, lng, radius, limit, page } = queryValidationResult.data;
         const result = yield beachService.findNearbyBeaches(lat, lng, radius, limit, page);
         res.json({
             message: `Nearby beaches within ${radius}km radius`,
@@ -134,7 +150,7 @@ router.get("/nearby", // Path: /beach/nearby?lat=-6.20&lng=106.81&radius=20&limi
         next(error);
     }
 }));
-// --- End Route Baru ---
+// PENTING: Route dengan parameter dinamis seperti /:placeId harus diletakkan di akhir
 router.get("/:placeId", (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { placeId } = req.params;
